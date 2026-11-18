@@ -1,0 +1,2732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NEON DRIFT — Cyberpunk Arcade Combat Racer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #05050a;
+      color: #f8fafc;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .font-display {
+      font-family: 'Orbitron', 'Inter', sans-serif;
+    }
+
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* High-contrast solid dark panels (no expensive CSS backdrop-filter) */
+    .cyber-hud-panel {
+      background-color: rgba(8, 8, 20, 0.92);
+      border: 1.5px solid rgba(0, 243, 255, 0.34);
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.1), inset 0 0 14px rgba(0, 243, 255, 0.05);
+    }
+
+    .cyber-modal-box {
+      background-color: rgba(7, 7, 18, 0.97);
+      border: 2px solid rgba(0, 243, 255, 0.65);
+      box-shadow: 0 0 42px rgba(0, 243, 255, 0.25), inset 0 0 26px rgba(255, 0, 127, 0.08);
+    }
+
+    .neon-title-glow {
+      text-shadow: 0 0 14px rgba(0, 243, 255, 0.85), 0 0 32px rgba(255, 0, 127, 0.6);
+    }
+
+    .cyber-cta-btn {
+      background: linear-gradient(135deg, #00f3ff 0%, #3b82f6 50%, #ff007f 100%);
+      color: #05050a;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      letter-spacing: 0.09em;
+      box-shadow: 0 0 24px rgba(0, 243, 255, 0.45);
+      transition: transform 0.1s ease, filter 0.15s ease;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .cyber-cta-btn:hover {
+      filter: brightness(1.12);
+    }
+
+    .cyber-cta-btn:active {
+      transform: scale(0.96);
+    }
+
+    @keyframes overdrivePulse {
+      0%, 100% {
+        box-shadow: 0 0 14px rgba(255, 234, 0, 0.8), 0 0 28px rgba(255, 0, 127, 0.6);
+        border-color: #ffea00;
+      }
+      50% {
+        box-shadow: 0 0 22px rgba(0, 243, 255, 0.95), 0 0 36px rgba(184, 41, 255, 0.8);
+        border-color: #00f3ff;
+      }
+    }
+
+    .overdrive-ready {
+      animation: overdrivePulse 0.85s infinite ease-in-out;
+    }
+
+    .touch-steer-btn {
+      background-color: rgba(10, 10, 26, 0.78);
+      border: 1.5px solid rgba(0, 243, 255, 0.45);
+      color: #e2e8f0;
+      touch-action: none;
+      transition: transform 0.06s ease, background-color 0.08s ease, border-color 0.08s ease;
+    }
+
+    .touch-steer-btn.pressed {
+      background-color: rgba(0, 243, 255, 0.28);
+      border-color: #00f3ff;
+      color: #ffffff;
+      transform: scale(0.95);
+    }
+
+    /* Show tactile mobile buttons on small screens or coarse-pointer touch devices */
+    @media (min-width: 768px) and (pointer: fine) {
+      #mobileControlsLayer {
+        display: none !important;
+      }
+    }
+
+    /* Explicit Layer Z-Index Architecture */
+    #gameCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      display: block;
+    }
+
+    #hudLayer {
+      z-index: 10;
+    }
+
+    #mobileControlsLayer {
+      z-index: 20;
+    }
+
+    #menuScreen,
+    #pauseScreen,
+    #gameOverScreen {
+      z-index: 30;
+      pointer-events: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Z-0: Fullscreen 60 FPS Highway Vector Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Z-10: Non-Blocking Top & Side HUD -->
+  <div id="hudLayer" class="fixed inset-x-0 top-0 p-2.5 sm:p-4 pointer-events-none flex flex-col gap-2">
+    
+    <!-- Top HUD Row -->
+    <div class="flex items-start justify-between gap-2">
+      
+      <!-- Left: Hull Integrity (3 Lives), Combo Multiplier & Speed -->
+      <div class="flex flex-col gap-1.5">
+        <div class="cyber-hud-panel rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 flex items-center gap-3 tabular-nums">
+          <div>
+            <div class="text-[9px] sm:text-[10px] font-bold tracking-widest text-cyan-400 uppercase mb-1">HULL</div>
+            <div id="hullHeartsRow" class="flex items-center gap-1"></div>
+          </div>
+
+          <div class="h-7 w-px bg-cyan-500/20"></div>
+
+          <div>
+            <div class="text-[9px] sm:text-[10px] font-bold tracking-widest text-fuchsia-400 uppercase">COMBO</div>
+            <div class="flex items-center gap-1.5">
+              <span id="comboVal" class="font-display text-base sm:text-xl font-black text-white leading-none">1X</span>
+              <div id="comboBarWrap" class="hidden w-10 sm:w-14 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                <div id="comboTimerFill" class="h-full bg-gradient-to-r from-fuchsia-500 to-cyan-400" style="width: 100%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hidden sm:block h-7 w-px bg-cyan-500/20"></div>
+
+          <div class="hidden sm:block">
+            <div class="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">SPEED</div>
+            <div id="speedVal" class="font-display text-sm font-extrabold text-emerald-300 leading-none">240 KM/H</div>
+          </div>
+        </div>
+
+        <!-- Overdrive Gauge Bar (Clickable / Spacebar Trigger) -->
+        <button
+          id="overdriveHudBtn"
+          type="button"
+          onclick="window.activateOverdrive()"
+          class="pointer-events-auto cyber-hud-panel rounded-xl px-3 py-1.5 flex items-center justify-between gap-2.5 cursor-pointer transition-transform active:scale-95 text-left"
+        >
+          <div class="flex-1 min-w-[115px] sm:min-w-[155px]">
+            <div class="flex items-center justify-between text-[10px] font-display font-black tracking-wider mb-0.5">
+              <span id="overdriveLabel" class="text-amber-300">OVERDRIVE 0%</span>
+              <span class="hidden sm:inline text-[9px] text-slate-400 font-mono">[SPACE]</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-900 border border-amber-400/40 overflow-hidden">
+              <div id="overdriveBarFill" class="h-full bg-gradient-to-r from-amber-500 via-fuchsia-500 to-cyan-300 transition-all duration-75" style="width: 0%"></div>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <!-- Center: Active Power-Up Timers & Omega Juggernaut Boss Health Bar -->
+      <div class="flex-1 max-w-md flex flex-col items-center gap-1.5">
+        <!-- Active Timed Power-Ups -->
+        <div id="activePowerupsContainer" class="flex flex-wrap justify-center gap-1.5"></div>
+
+        <!-- Omega Juggernaut Boss Health Bar -->
+        <div id="bossHudBox" class="hidden w-full cyber-hud-panel border-rose-500/85 rounded-xl px-3 py-2">
+          <div class="flex items-center justify-between text-[10px] sm:text-xs font-display font-black mb-1 tabular-nums">
+            <span id="bossNameLabel" class="text-rose-400 tracking-wider">⚠ OMEGA JUGGERNAUT MK-1</span>
+            <span id="bossHpLabel" class="text-white">1800 / 1800</span>
+          </div>
+          <div class="w-full h-2.5 sm:h-3 rounded-full bg-slate-950 border border-rose-500/60 overflow-hidden">
+            <div id="bossHpFill" class="h-full bg-gradient-to-r from-rose-600 via-fuchsia-500 to-amber-400" style="width: 100%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Score, Distance, Sector & Mute/Pause Controls -->
+      <div class="flex items-start gap-1.5 sm:gap-2.5">
+        <div class="cyber-hud-panel rounded-xl px-2.5 py-2 sm:px-3.5 sm:py-2.5 text-right tabular-nums">
+          <div class="text-[9px] sm:text-[10px] font-bold tracking-widest text-cyan-400 uppercase">SCORE</div>
+          <div id="scoreVal" class="font-display text-base sm:text-2xl font-black text-white leading-tight">0</div>
+          <div class="mt-1 pt-1 border-t border-cyan-500/20 flex items-center justify-end gap-2 sm:gap-3 text-[10px] sm:text-xs font-display font-bold">
+            <span class="text-amber-300">SEC <span id="sectorVal">1</span></span>
+            <span class="text-slate-400">&bull;</span>
+            <span class="text-cyan-200"><span id="distVal">0</span>m</span>
+          </div>
+        </div>
+
+        <!-- Mute & Pause Buttons (pointer-events-auto) -->
+        <div class="flex flex-col gap-1.5 pointer-events-auto">
+          <button
+            id="muteBtn"
+            type="button"
+            onclick="window.toggleMute()"
+            title="Mute / Unmute (M)"
+            aria-label="Toggle Sound"
+            class="cyber-hud-panel hover:border-cyan-400 rounded-xl p-2 text-cyan-300 hover:text-white cursor-pointer active:scale-95"
+          >
+            <svg id="audioOnIcon" class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
+            </svg>
+            <svg id="audioOffIcon" class="w-4 h-4 sm:w-5 sm:h-5 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M23 9l-6 6M17 9l6 6"></path>
+            </svg>
+          </button>
+
+          <button
+            id="pauseBtn"
+            type="button"
+            onclick="window.togglePause()"
+            title="Pause Game (P / Esc)"
+            aria-label="Pause Game"
+            class="cyber-hud-panel hover:border-fuchsia-400 rounded-xl p-2 text-fuchsia-300 hover:text-white cursor-pointer active:scale-95"
+          >
+            <svg id="pauseBarsIcon" class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6"></path>
+            </svg>
+            <svg id="resumeTriIcon" class="w-4 h-4 sm:w-5 sm:h-5 hidden text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 5v14l11-7z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sector Announcement Toast (Non-Blocking) -->
+  <div id="sectorToast" class="hidden fixed inset-x-0 top-28 z-10 flex justify-center pointer-events-none px-4">
+    <div class="cyber-hud-panel border-2 border-cyan-400/75 rounded-2xl px-6 py-2.5 text-center">
+      <div id="sectorToastSub" class="text-[10px] font-bold tracking-widest text-cyan-300 uppercase">SECTOR CLEARED</div>
+      <div id="sectorToastTitle" class="font-display text-xl sm:text-2xl font-black tracking-widest text-white">SECTOR 2</div>
+    </div>
+  </div>
+
+  <!-- Z-20: Tactile Mobile Controls (Plus Direct Touch-Drag Steering on Canvas) -->
+  <div id="mobileControlsLayer" class="fixed inset-x-0 bottom-0 p-3 flex items-end justify-between gap-2 pointer-events-none">
+    <button
+      id="touchLeftBtn"
+      type="button"
+      aria-label="Steer Left"
+      class="pointer-events-auto touch-steer-btn w-20 h-16 rounded-2xl flex items-center justify-center font-display text-xl font-black text-cyan-300"
+    >
+      ◀
+    </button>
+
+    <button
+      id="touchOverdriveBtn"
+      type="button"
+      onclick="window.activateOverdrive()"
+      aria-label="Activate Overdrive"
+      class="pointer-events-auto cyber-hud-panel border-2 border-amber-400/70 px-5 h-16 rounded-2xl flex flex-col items-center justify-center font-display text-xs font-black text-amber-300 tracking-wider active:scale-95"
+    >
+      <span class="text-base leading-none mb-0.5">⚡</span>
+      <span>OVERDRIVE</span>
+    </button>
+
+    <button
+      id="touchRightBtn"
+      type="button"
+      aria-label="Steer Right"
+      class="pointer-events-auto touch-steer-btn w-20 h-16 rounded-2xl flex items-center justify-center font-display text-xl font-black text-cyan-300"
+    >
+      ▶
+    </button>
+  </div>
+
+  <!-- Z-30: Start Menu Overlay -->
+  <div id="menuScreen" style="z-index: 30; pointer-events: auto;" class="fixed inset-0 flex items-center justify-center p-4">
+    <div class="cyber-modal-box rounded-2xl p-5 sm:p-7 max-w-xl w-full max-h-[92vh] overflow-y-auto">
+      <div class="text-center mb-4">
+        <div class="inline-block px-3 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 text-[10px] sm:text-xs font-bold tracking-widest uppercase mb-1.5">
+          Cyberpunk Combat Highway
+        </div>
+        <h1 class="font-display text-3xl sm:text-5xl font-black tracking-wider text-white neon-title-glow italic">
+          NEON DRIFT
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-300 mt-1.5">
+          Thread through 5 lanes of neon traffic for <strong class="text-cyan-300">Near-Miss Graze Combos</strong>, arm <strong class="text-fuchsia-400">Twin Railguns</strong>, unleash <strong class="text-amber-300">Overdrive</strong>, and smash <strong class="text-rose-400">OMEGA JUGGERNAUTS</strong> every 1,500m!
+        </p>
+      </div>
+
+      <!-- Controls Bar -->
+      <div class="rounded-xl bg-white/[0.04] border border-white/10 p-3 mb-4 text-xs text-slate-300 text-center space-y-1">
+        <div>
+          <strong class="text-cyan-300">Desktop:</strong>
+          <kbd class="px-1.5 py-0.5 bg-white/10 rounded text-white">A/D</kbd> or <kbd class="px-1.5 py-0.5 bg-white/10 rounded text-white">◀/▶</kbd> Steer &bull;
+          <kbd class="px-1.5 py-0.5 bg-white/10 rounded text-white">W/S</kbd> Surge/Brake &bull;
+          <kbd class="px-1.5 py-0.5 bg-white/10 rounded text-white">SPACE</kbd> Overdrive
+        </div>
+        <div>
+          <strong class="text-fuchsia-300">Mobile:</strong>
+          Drag horizontally anywhere on the highway or tap bottom steering pads
+        </div>
+      </div>
+
+      <!-- 6 Power-Up Capsules Legend -->
+      <div class="mb-5">
+        <div class="text-[11px] font-display font-bold uppercase tracking-widest text-slate-400 mb-2 text-center">
+          6 Highway Power-Up Capsules
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-left text-[11px]">
+          <div class="p-2 rounded-xl bg-white/[0.03] border border-amber-400/40">
+            <div class="font-display font-bold text-amber-300">⚡ HYPER NITRO</div>
+            <div class="text-slate-400 leading-tight mt-0.5">6s invulnerable smash rampage (+300/hit)</div>
+          </div>
+          <div class="p-2 rounded-xl bg-white/[0.03] border border-fuchsia-400/40">
+            <div class="font-display font-bold text-fuchsia-300">🔫 TWIN RAILGUNS</div>
+            <div class="text-slate-400 leading-tight mt-0.5">8s auto-firing plasma cannons</div>
+          </div>
+          <div class="p-2 rounded-xl bg-white/[0.03] border border-emerald-400/40">
+            <div class="font-display font-bold text-emerald-300">🛡 AEGIS SHIELD</div>
+            <div class="text-slate-400 leading-tight mt-0.5">Absorbs crash + repairs +1 Hull</div>
+          </div>
+          <div class="p-2 rounded-xl bg-white/[0.03] border border-purple-400/40">
+            <div class="font-display font-bold text-purple-300">🧲 MAG-FIELD</div>
+            <div class="text-slate-400 leading-tight mt-0.5">9s 5-lane shard &amp; capsule vacuum</div>
+          </div>
+          <div class="p-2 rounded-xl bg-white/[0.03] border border-sky-400/40">
+            <div class="font-display font-bold text-sky-300">❄ CHRONO SLOW</div>
+            <div class="text-slate-400 leading-tight mt-0.5">7s -50% traffic &amp; hazard speed</div>
+          </div>
+          <div class="p-2 rounded-xl bg-white/[0.03] border border-orange-400/40">
+            <div class="font-display font-bold text-orange-300">💥 EMP NOVA</div>
+            <div class="text-slate-400 leading-tight mt-0.5">Instant screen-wipe + heavy Boss hit</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col items-center gap-2">
+        <button
+          id="startBtn"
+          type="button"
+          onclick="window.startGame()"
+          class="cyber-cta-btn w-full sm:w-auto px-12 py-3.5 rounded-xl text-base sm:text-lg uppercase"
+        >
+          ▶ IGNITE ENGINE
+        </button>
+        <div class="text-xs font-mono text-slate-400">
+          HIGH SCORE: <span id="menuHighScore" class="text-cyan-300 font-bold">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Z-30: Pause Overlay -->
+  <div id="pauseScreen" style="z-index: 30; pointer-events: auto;" class="hidden fixed inset-0 flex items-center justify-center p-4">
+    <div class="cyber-modal-box border-fuchsia-400/80 rounded-2xl p-7 max-w-sm w-full text-center">
+      <div class="text-xs font-bold tracking-widest text-fuchsia-300 uppercase mb-1">THRUSTERS STANDBY</div>
+      <h2 class="font-display text-3xl font-black text-white tracking-wider mb-5">PAUSED</h2>
+      <div class="flex flex-col gap-2.5">
+        <button
+          id="resumeBtn"
+          type="button"
+          onclick="window.togglePause()"
+          class="cyber-cta-btn w-full py-3 rounded-xl text-sm uppercase"
+        >
+          ▶ RESUME RACE
+        </button>
+        <button
+          type="button"
+          onclick="window.startGame()"
+          class="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs font-bold uppercase tracking-wider text-slate-200 cursor-pointer"
+        >
+          ↺ RESTART RUN
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Z-30: Game Over Overlay -->
+  <div id="gameOverScreen" style="z-index: 30; pointer-events: auto;" class="hidden fixed inset-0 flex items-center justify-center p-4">
+    <div class="cyber-modal-box border-rose-500/85 rounded-2xl p-6 sm:p-7 max-w-md w-full text-center">
+      <div class="text-xs font-bold tracking-widest text-rose-400 uppercase mb-1">INTERCEPTOR WRECKED</div>
+      <h2 class="font-display text-3xl sm:text-4xl font-black text-white tracking-wider mb-2">
+        GAME OVER
+      </h2>
+
+      <div id="newRecordBadge" class="hidden inline-block px-3 py-0.5 rounded-full bg-amber-400/20 border border-amber-400 text-amber-300 text-xs font-extrabold tracking-wider uppercase mb-3">
+        ★ NEW HIGH SCORE ★
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 my-4 p-3.5 rounded-xl bg-white/[0.04] border border-white/10 tabular-nums text-left">
+        <div>
+          <div class="text-[10px] font-bold text-slate-400 uppercase">FINAL SCORE</div>
+          <div id="finalScoreVal" class="font-display text-lg font-black text-cyan-300">0</div>
+        </div>
+        <div>
+          <div class="text-[10px] font-bold text-slate-400 uppercase">HIGH SCORE</div>
+          <div id="finalBestVal" class="font-display text-lg font-black text-amber-300">0</div>
+        </div>
+        <div>
+          <div class="text-[10px] font-bold text-slate-400 uppercase">DISTANCE</div>
+          <div id="finalDistVal" class="font-display text-sm font-bold text-emerald-300">0m</div>
+        </div>
+        <div>
+          <div class="text-[10px] font-bold text-slate-400 uppercase">MAX COMBO</div>
+          <div id="finalComboVal" class="font-display text-sm font-bold text-fuchsia-300">1X</div>
+        </div>
+      </div>
+
+      <button
+        id="restartBtn"
+        type="button"
+        onclick="window.startGame()"
+        class="cyber-cta-btn w-full py-3.5 rounded-xl text-base uppercase"
+      >
+        ↻ RACE AGAIN
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================================
+      // 1. SAFE STORAGE & PROCEDURAL WEB AUDIO SYNTHESIZER (Sandbox-Resilient)
+      // =========================================================================
+      const STORAGE_KEY = 'neonDriftHighScore';
+      let audioCtx = null;
+      let isMuted = false;
+      let engineOsc = null;
+      let engineGain = null;
+      let driftNoiseNode = null;
+      let driftGain = null;
+      const soundCooldowns = {};
+
+      function safeGetHighScore() {
+        try {
+          const val = parseInt(window.localStorage.getItem(STORAGE_KEY) || '0', 10);
+          return Number.isFinite(val) && val > 0 ? val : 0;
+        } catch (err) {
+          return 0;
+        }
+      }
+
+      function safeSetHighScore(val) {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, String(Math.max(0, Math.floor(val))));
+        } catch (err) {
+          // Ignore sandboxed storage limits
+        }
+      }
+
+      function canPlay(key, gapMs) {
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        if (soundCooldowns[key] && now - soundCooldowns[key] < gapMs) return false;
+        soundCooldowns[key] = now;
+        return true;
+      }
+
+      function initAudio() {
+        try {
+          if (!audioCtx) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (Ctx) audioCtx = new Ctx();
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(function () {});
+          }
+
+          // Continuous Engine Hum & Tire Drift Audio Nodes
+          if (audioCtx && !engineOsc) {
+            engineOsc = audioCtx.createOscillator();
+            const engineFilter = audioCtx.createBiquadFilter();
+            engineGain = audioCtx.createGain();
+
+            engineOsc.type = 'sawtooth';
+            engineOsc.frequency.setValueAtTime(55, audioCtx.currentTime);
+            engineFilter.type = 'lowpass';
+            engineFilter.frequency.setValueAtTime(190, audioCtx.currentTime);
+            engineGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+
+            engineOsc.connect(engineFilter);
+            engineFilter.connect(engineGain);
+            engineGain.connect(audioCtx.destination);
+            engineOsc.start();
+          }
+
+          if (audioCtx && !driftNoiseNode) {
+            const bufferSize = audioCtx.sampleRate * 1.5;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+              data[i] = Math.random() * 2 - 1;
+            }
+            driftNoiseNode = audioCtx.createBufferSource();
+            driftNoiseNode.buffer = buffer;
+            driftNoiseNode.loop = true;
+
+            const bandpass = audioCtx.createBiquadFilter();
+            bandpass.type = 'bandpass';
+            bandpass.frequency.setValueAtTime(1350, audioCtx.currentTime);
+            bandpass.Q.setValueAtTime(3.2, audioCtx.currentTime);
+
+            driftGain = audioCtx.createGain();
+            driftGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+
+            driftNoiseNode.connect(bandpass);
+            bandpass.connect(driftGain);
+            driftGain.connect(audioCtx.destination);
+            driftNoiseNode.start();
+          }
+        } catch (err) {
+          audioCtx = null;
+        }
+      }
+
+      function updateContinuousAudio(active, speedRatio, driftIntensity) {
+        try {
+          if (!audioCtx || !engineOsc || !engineGain || !driftGain) return;
+          const now = audioCtx.currentTime;
+          if (isMuted || !active) {
+            engineGain.gain.setTargetAtTime(0.0001, now, 0.06);
+            driftGain.gain.setTargetAtTime(0.0001, now, 0.05);
+            return;
+          }
+          const targetFreq = 52 + speedRatio * 68;
+          engineOsc.frequency.setTargetAtTime(targetFreq, now, 0.08);
+          engineGain.gain.setTargetAtTime(0.042, now, 0.08);
+
+          const targetDrift = driftIntensity > 0.28 ? Math.min(0.045, driftIntensity * 0.045) : 0.0001;
+          driftGain.gain.setTargetAtTime(targetDrift, now, 0.05);
+        } catch (err) {}
+      }
+
+      function synthTone(f1, f2, dur, type, vol, delay) {
+        if (isMuted) return;
+        try {
+          initAudio();
+          if (!audioCtx) return;
+          const t0 = audioCtx.currentTime + (delay || 0);
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = type || 'sawtooth';
+          osc.frequency.setValueAtTime(f1, t0);
+          if (f2 && f2 !== f1) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t0 + dur);
+          }
+          gain.gain.setValueAtTime(0.0001, t0);
+          gain.gain.linearRampToValueAtTime(vol || 0.12, t0 + 0.008);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(t0);
+          osc.stop(t0 + dur + 0.02);
+        } catch (err) {}
+      }
+
+      const sfx = {
+        nearMiss: function (comboNum) {
+          if (!canPlay('nearMiss', 75)) return;
+          const boost = Math.min(comboNum || 1, 10) * 45;
+          synthTone(660 + boost, 1180 + boost, 0.14, 'triangle', 0.13, 0);
+          synthTone(990 + boost, 1480 + boost, 0.12, 'sine', 0.09, 0.04);
+        },
+        railgun: function () {
+          if (!canPlay('railgun', 60)) return;
+          synthTone(1120, 220, 0.08, 'sawtooth', 0.09, 0);
+        },
+        shard: function () {
+          if (!canPlay('shard', 40)) return;
+          synthTone(780, 1046.5, 0.07, 'sine', 0.08, 0);
+          synthTone(1046.5, 1318.5, 0.08, 'triangle', 0.07, 0.03);
+        },
+        powerup: function () {
+          synthTone(523.25, 659.25, 0.09, 'triangle', 0.15, 0);
+          synthTone(659.25, 783.99, 0.09, 'triangle', 0.15, 0.07);
+          synthTone(783.99, 1174.66, 0.2, 'triangle', 0.17, 0.14);
+        },
+        overdrive: function () {
+          synthTone(220, 980, 0.28, 'sawtooth', 0.18, 0);
+          synthTone(440, 1320, 0.34, 'triangle', 0.16, 0.06);
+        },
+        explosion: function (heavy) {
+          if (!canPlay('explosion', heavy ? 70 : 45)) return;
+          synthTone(heavy ? 120 : 185, 28, heavy ? 0.38 : 0.18, 'sawtooth', heavy ? 0.22 : 0.12, 0);
+          synthTone(85, 24, heavy ? 0.42 : 0.2, 'square', heavy ? 0.15 : 0.08, 0.02);
+        },
+        bossSiren: function () {
+          synthTone(440, 620, 0.22, 'sawtooth', 0.15, 0);
+          synthTone(620, 440, 0.22, 'sawtooth', 0.15, 0.24);
+          synthTone(440, 660, 0.26, 'sawtooth', 0.16, 0.48);
+        }
+      };
+
+      // =========================================================================
+      // 2. CONSTANTS, POWER-UP CAPSULES & HIGHWAY GEOMETRY
+      // =========================================================================
+      const LANE_COUNT = 5;
+      const MAX_HULL = 3;
+      const STARTING_HULL = 3;
+      const GRAZE_MARGIN_PX = 26;
+      const COMBO_WINDOW_SEC = 3.4;
+      const OVERDRIVE_DURATION = 6.0;
+      const SECTOR_INTERVAL_M = 1500;
+
+      const POWERUPS = {
+        nitro: {
+          id: 'nitro',
+          name: 'HYPER NITRO',
+          short: 'NITRO',
+          badge: '⚡',
+          color: '#ffea00',
+          duration: 6.0,
+          weight: 18
+        },
+        railgun: {
+          id: 'railgun',
+          name: 'TWIN RAILGUNS',
+          short: 'RAILGUN',
+          badge: '🔫',
+          color: '#ff007f',
+          duration: 8.0,
+          weight: 22
+        },
+        shield: {
+          id: 'shield',
+          name: 'AEGIS SHIELD',
+          short: 'SHIELD',
+          badge: '🛡',
+          color: '#00ff88',
+          duration: 12.0,
+          weight: 18
+        },
+        magnet: {
+          id: 'magnet',
+          name: 'MAG-FIELD',
+          short: 'MAGNET',
+          badge: '🧲',
+          color: '#b829ff',
+          duration: 9.0,
+          weight: 18
+        },
+        chrono: {
+          id: 'chrono',
+          name: 'CHRONO SLOW',
+          short: 'CHRONO',
+          badge: '❄',
+          color: '#38bdf8',
+          duration: 7.0,
+          weight: 14
+        },
+        emp: {
+          id: 'emp',
+          name: 'EMP NOVA',
+          short: 'EMP',
+          badge: '💥',
+          color: '#ff7b00',
+          duration: 0, // Instant
+          weight: 10
+        }
+      };
+
+      // =========================================================================
+      // 3. CANVAS, POOLED FX & GAME STATE
+      // =========================================================================
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+
+      let viewW = window.innerWidth;
+      let viewH = window.innerHeight;
+      let roadLeft = 0;
+      let roadRight = 0;
+      let roadWidth = 420;
+      let laneWidth = 84;
+
+      let gameState = 'MENU'; // 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'
+      let lastStartCallMs = 0;
+      let lastFrameTime = 0;
+
+      // Telemetry & Run Progression
+      let score = 0;
+      let highScore = safeGetHighScore();
+      let distanceM = 0;
+      let sector = 1;
+      let nextBossDistM = SECTOR_INTERVAL_M;
+      let hull = STARTING_HULL;
+      let combo = 1;
+      let maxCombo = 1;
+      let comboTimer = 0;
+      let overdriveCharge = 0; // 0..100
+      let overdriveTimer = 0;
+
+      // Active Timed Power-Ups: { nitro, railgun, shield, magnet, chrono }
+      let activeTimers = {};
+
+      // Player Interceptor State
+      const player = {
+        x: 0,
+        y: 0,
+        vx: 0,
+        tilt: 0,
+        hitboxW: 26,
+        hitboxH: 50,
+        invulnTimer: 0,
+        railgunCooldown: 0,
+        thrustOffset: 0
+      };
+
+      // Highway Scroll & Equalizer Bars
+      let roadScrollY = 0;
+      const eqBarsLeft = new Array(16).fill(0.3);
+      const eqBarsRight = new Array(16).fill(0.3);
+
+      // Entity Collections
+      let obstacles = [];
+      let nextObsId = 1;
+      let shards = [];
+      let capsules = [];
+      let playerBolts = [];
+      let bossProjectiles = [];
+      let bossMines = [];
+      let shockwaves = [];
+      let grazeArcs = [];
+      let popups = [];
+      let boss = null;
+
+      // Bounded Skid Trail Ring Buffer
+      const MAX_SKIDS = 90;
+      const skidTrails = [];
+
+      // Pre-Allocated Particle Pool (Zero per-frame GC allocation)
+      const MAX_PARTICLES = 240;
+      const particles = [];
+      for (let i = 0; i < MAX_PARTICLES; i++) {
+        particles.push({
+          active: false,
+          x: 0,
+          y: 0,
+          vx: 0,
+          vy: 0,
+          size: 2.5,
+          color: '#00f3ff',
+          life: 0,
+          maxLife: 0.45
+        });
+      }
+
+      let spawnTimer = 0;
+      let shardSpawnTimer = 0;
+      let bossSupplyTimer = 0;
+      let shakeTime = 0;
+      let shakeMag = 0;
+      let flashColor = '#ffffff';
+      let flashAlpha = 0;
+      let sectorToastTimer = 0;
+
+      // Input State (Desktop + Mobile Touch Buttons + Touch-Drag on Canvas)
+      const keys = {};
+      const touchBtns = { left: false, right: false };
+      const dragControl = { active: false, pointerId: null, lastX: 0 };
+
+      // =========================================================================
+      // 4. HIGHWAY GEOMETRY & RESPONSIVE RESIZE
+      // =========================================================================
+      function updateRoadDimensions() {
+        const margin = viewW < 640 ? 22 : 80;
+        roadWidth = Math.max(250, Math.min(viewW - margin, 520));
+        roadLeft = Math.floor((viewW - roadWidth) * 0.5);
+        roadRight = roadLeft + roadWidth;
+        laneWidth = roadWidth / LANE_COUNT;
+      }
+
+      function getLaneCenterX(laneIndex) {
+        return roadLeft + (laneIndex + 0.5) * laneWidth;
+      }
+
+      function resizeCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const prevRoadLeft = roadLeft;
+        const prevRoadWidth = roadWidth;
+
+        viewW = window.innerWidth;
+        viewH = window.innerHeight;
+        canvas.width = Math.floor(viewW * dpr);
+        canvas.height = Math.floor(viewH * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        updateRoadDimensions();
+
+        // Preserve player's relative lane position across resizes
+        if (prevRoadWidth > 0 && player.x > 0) {
+          const rel = (player.x - prevRoadLeft) / prevRoadWidth;
+          player.x = roadLeft + Math.max(0.08, Math.min(0.92, rel)) * roadWidth;
+        } else {
+          player.x = getLaneCenterX(2);
+        }
+        player.y = viewH - (viewW < 640 ? 132 : 112);
+      }
+      window.addEventListener('resize', resizeCanvas);
+
+      // =========================================================================
+      // 5. VISUAL FX POOLS, SCORE & HUD UPDATES
+      // =========================================================================
+      function spawnParticles(x, y, color, count, speedMult) {
+        let spawned = 0;
+        const mult = speedMult || 1;
+        for (let i = 0; i < MAX_PARTICLES && spawned < count; i++) {
+          const p = particles[i];
+          if (!p.active) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = (65 + Math.random() * 230) * mult;
+            p.active = true;
+            p.x = x;
+            p.y = y;
+            p.vx = Math.cos(a) * spd;
+            p.vy = Math.sin(a) * spd;
+            p.size = 2 + Math.random() * 3;
+            p.color = Math.random() > 0.2 ? color : '#ffffff';
+            p.maxLife = 0.28 + Math.random() * 0.34;
+            p.life = p.maxLife;
+            spawned++;
+          }
+        }
+      }
+
+      function spawnPopup(x, y, text, color, scale) {
+        if (popups.length >= 28) popups.shift();
+        popups.push({
+          x: Math.max(60, Math.min(viewW - 60, x)),
+          y: Math.max(70, Math.min(viewH - 50, y)),
+          vy: -52,
+          text: String(text),
+          color: color || '#ffffff',
+          scale: scale || 1,
+          life: 0.95
+        });
+      }
+
+      function triggerShake(dur, mag) {
+        shakeTime = Math.max(shakeTime, dur);
+        shakeMag = Math.max(shakeMag, mag);
+      }
+
+      function triggerFlash(color, alpha) {
+        flashColor = color;
+        flashAlpha = Math.max(flashAlpha, alpha);
+      }
+
+      function showSectorToast(subText, titleText) {
+        const toast = document.getElementById('sectorToast');
+        document.getElementById('sectorToastSub').textContent = subText;
+        document.getElementById('sectorToastTitle').textContent = titleText;
+        toast.classList.remove('hidden');
+        sectorToastTimer = 2.2;
+      }
+
+      function isHyperInvulnerable() {
+        return overdriveTimer > 0 || Boolean(activeTimers.nitro);
+      }
+
+      function addScore(basePoints, px, py, color, customText) {
+        const odMult = overdriveTimer > 0 ? 2 : 1;
+        const earned = Math.round(basePoints * combo * odMult);
+        score += earned;
+        if (score > highScore) {
+          highScore = score;
+          safeSetHighScore(highScore);
+        }
+        if (px !== undefined && py !== undefined) {
+          const label = customText || '+' + earned;
+          spawnPopup(px, py, label, color || '#00f3ff', 1);
+        }
+        updateHUD();
+        return earned;
+      }
+
+      function bumpCombo() {
+        combo = Math.min(10, combo + 1);
+        if (combo > maxCombo) maxCombo = combo;
+        comboTimer = COMBO_WINDOW_SEC;
+      }
+
+      function renderHullHearts() {
+        const row = document.getElementById('hullHeartsRow');
+        let html = '';
+        for (let i = 0; i < MAX_HULL; i++) {
+          const active = i < hull;
+          html +=
+            '<svg class="w-4 h-4 sm:w-5 sm:h-5 ' +
+            (active ? 'text-rose-500' : 'text-slate-700') +
+            '" viewBox="0 0 24 24" fill="' +
+            (active ? 'currentColor' : 'none') +
+            '" stroke="currentColor" stroke-width="2">' +
+            '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
+            '</svg>';
+        }
+        row.innerHTML = html;
+      }
+
+      function renderActivePowerupsHUD() {
+        const container = document.getElementById('activePowerupsContainer');
+        const keysList = Object.keys(activeTimers);
+        if (keysList.length === 0) {
+          container.innerHTML = '';
+          return;
+        }
+        container.innerHTML = keysList
+          .map(function (k) {
+            const def = POWERUPS[k];
+            const timer = activeTimers[k];
+            const pct = Math.max(0, Math.min(100, (timer.remaining / timer.duration) * 100));
+            return (
+              '<div class="cyber-hud-panel px-2.5 py-1 rounded-lg min-w-[84px] sm:min-w-[106px]" style="border-color:' +
+              def.color +
+              '88;">' +
+              '<div class="flex items-center justify-between gap-1 text-[9px] sm:text-[10px] font-display font-bold mb-0.5" style="color:' +
+              def.color +
+              ';">' +
+              '<span>' +
+              def.short +
+              '</span>' +
+              '<span class="font-mono text-white">' +
+              timer.remaining.toFixed(1) +
+              's</span>' +
+              '</div>' +
+              '<div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden">' +
+              '<div class="h-full rounded-full" style="width:' +
+              pct.toFixed(1) +
+              '%; background-color:' +
+              def.color +
+              ';"></div>' +
+              '</div>' +
+              '</div>'
+            );
+          })
+          .join('');
+      }
+
+      function updateHUD() {
+        document.getElementById('scoreVal').textContent = score.toLocaleString();
+        document.getElementById('sectorVal').textContent = String(sector);
+        document.getElementById('distVal').textContent = Math.floor(distanceM).toLocaleString();
+
+        const comboEl = document.getElementById('comboVal');
+        const comboWrap = document.getElementById('comboBarWrap');
+        comboEl.textContent = combo + 'X';
+        comboEl.className =
+          combo >= 5
+            ? 'font-display text-base sm:text-xl font-black text-amber-300 leading-none'
+            : combo >= 2
+            ? 'font-display text-base sm:text-xl font-black text-fuchsia-300 leading-none'
+            : 'font-display text-base sm:text-xl font-black text-white leading-none';
+        comboWrap.classList.toggle('hidden', combo <= 1 || comboTimer <= 0);
+
+        // Overdrive Meter
+        const odBtn = document.getElementById('overdriveHudBtn');
+        const odLabel = document.getElementById('overdriveLabel');
+        const odFill = document.getElementById('overdriveBarFill');
+        const mobileOdBtn = document.getElementById('touchOverdriveBtn');
+
+        if (overdriveTimer > 0) {
+          odLabel.textContent = 'OVERDRIVE ' + overdriveTimer.toFixed(1) + 's (2X)';
+          odFill.style.width = ((overdriveTimer / OVERDRIVE_DURATION) * 100).toFixed(1) + '%';
+          odBtn.classList.add('overdrive-ready');
+          if (mobileOdBtn) mobileOdBtn.classList.add('overdrive-ready');
+        } else if (overdriveCharge >= 100) {
+          odLabel.textContent = 'OVERDRIVE READY!';
+          odFill.style.width = '100%';
+          odBtn.classList.add('overdrive-ready');
+          if (mobileOdBtn) mobileOdBtn.classList.add('overdrive-ready');
+        } else {
+          odLabel.textContent = 'OVERDRIVE ' + Math.floor(overdriveCharge) + '%';
+          odFill.style.width = overdriveCharge.toFixed(1) + '%';
+          odBtn.classList.remove('overdrive-ready');
+          if (mobileOdBtn) mobileOdBtn.classList.remove('overdrive-ready');
+        }
+
+        // Boss Health Bar
+        const bossHud = document.getElementById('bossHudBox');
+        if (boss) {
+          bossHud.classList.remove('hidden');
+          document.getElementById('bossNameLabel').textContent = '⚠ ' + boss.name;
+          document.getElementById('bossHpLabel').textContent = Math.ceil(boss.hp) + ' / ' + Math.ceil(boss.maxHp);
+          document.getElementById('bossHpFill').style.width = Math.max(0, (boss.hp / boss.maxHp) * 100).toFixed(1) + '%';
+        } else {
+          bossHud.classList.add('hidden');
+        }
+      }
+
+      // =========================================================================
+      // 6. POWER-UP CAPSULE ACTIVATION & OVERDRIVE
+      // =========================================================================
+      function triggerEmpNova() {
+        sfx.explosion(true);
+        triggerShake(0.45, 13);
+        triggerFlash('#ff7b00', 0.34);
+
+        shockwaves.push({
+          x: player.x,
+          y: player.y,
+          radius: 18,
+          maxRadius: Math.max(viewW, viewH) * 0.85,
+          color: '#ff7b00',
+          life: 0.55,
+          maxLife: 0.55
+        });
+
+        bossProjectiles.length = 0;
+        bossMines.length = 0;
+
+        let destroyed = 0;
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          const obs = obstacles[i];
+          spawnParticles(obs.x, obs.y, obs.color, 16, 1.15);
+          obstacles.splice(i, 1);
+          destroyed++;
+        }
+
+        if (destroyed > 0) {
+          addScore(destroyed * 120, player.x, player.y - 34, '#ff7b00', 'EMP WIPE +' + destroyed * 120 * combo);
+        }
+
+        if (boss) {
+          damageBoss(450, '#ff7b00');
+        }
+      }
+
+      function collectCapsule(cap) {
+        if (cap.type === 'overdriveCell') {
+          sfx.powerup();
+          spawnParticles(cap.x, cap.y, '#ffea00', 18, 1.1);
+          overdriveCharge = Math.min(100, overdriveCharge + 35);
+          spawnPopup(cap.x, cap.y - 16, '+35% OVERDRIVE!', '#ffea00', 1.1);
+          updateHUD();
+          return;
+        }
+
+        const def = POWERUPS[cap.type];
+        if (!def) return;
+
+        sfx.powerup();
+        spawnParticles(cap.x, cap.y, def.color, 22, 1.15);
+        spawnPopup(cap.x, cap.y - 18, def.name + '!', def.color, 1.15);
+
+        if (cap.type === 'nitro') {
+          activeTimers.nitro = { remaining: def.duration, duration: def.duration };
+          triggerFlash('#ffea00', 0.22);
+        } else if (cap.type === 'railgun') {
+          activeTimers.railgun = { remaining: def.duration, duration: def.duration };
+        } else if (cap.type === 'shield') {
+          activeTimers.shield = { remaining: def.duration, duration: def.duration };
+          if (hull < MAX_HULL) {
+            hull++;
+            renderHullHearts();
+            spawnPopup(player.x, player.y - 42, '+1 HULL REPAIRED!', '#00ff88', 1.1);
+          }
+        } else if (cap.type === 'magnet') {
+          activeTimers.magnet = { remaining: def.duration, duration: def.duration };
+        } else if (cap.type === 'chrono') {
+          activeTimers.chrono = { remaining: def.duration, duration: def.duration };
+        } else if (cap.type === 'emp') {
+          triggerEmpNova();
+        }
+
+        renderActivePowerupsHUD();
+        updateHUD();
+      }
+
+      window.activateOverdrive = function () {
+        if (gameState !== 'PLAYING' || overdriveCharge < 100 || overdriveTimer > 0) return;
+
+        overdriveCharge = 0;
+        overdriveTimer = OVERDRIVE_DURATION;
+        sfx.overdrive();
+        triggerShake(0.45, 11);
+        triggerFlash('#ffea00', 0.32);
+        spawnPopup(player.x, player.y - 44, '⚡ FULL OVERDRIVE (2X)! ⚡', '#ffea00', 1.3);
+
+        shockwaves.push({
+          x: player.x,
+          y: player.y,
+          radius: 16,
+          maxRadius: 340,
+          color: '#ffea00',
+          life: 0.45,
+          maxLife: 0.45
+        });
+        updateHUD();
+      };
+
+      // =========================================================================
+      // 7. OBSTACLES, HUNTER INTERCEPTORS & OMEGA JUGGERNAUT MEGA BOSS
+      // =========================================================================
+      function chooseRandomPowerupType() {
+        const pool = Object.values(POWERUPS);
+        const total = pool.reduce(function (acc, item) {
+          return acc + item.weight;
+        }, 0);
+        let roll = Math.random() * total;
+        for (let i = 0; i < pool.length; i++) {
+          roll -= pool[i].weight;
+          if (roll <= 0) return pool[i].id;
+        }
+        return 'railgun';
+      }
+
+      function spawnTrafficWave() {
+        // Choose 1 to 3 occupied lanes, always leaving at least 2 lanes open!
+        const laneIndices = [0, 1, 2, 3, 4];
+        for (let i = laneIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = laneIndices[i];
+          laneIndices[i] = laneIndices[j];
+          laneIndices[j] = tmp;
+        }
+
+        const maxBlocked = Math.min(3, 1 + Math.floor(sector * 0.65));
+        const count = 1 + Math.floor(Math.random() * maxBlocked);
+
+        for (let i = 0; i < count; i++) {
+          const lane = laneIndices[i];
+          const lx = getLaneCenterX(lane);
+          const roll = Math.random();
+
+          if (sector >= 2 && roll < 0.22) {
+            // Hunter Police Interceptor (Telegraphs lane lunge with red laser sight)
+            obstacles.push({
+              id: nextObsId++,
+              type: 'hunter',
+              lane: lane,
+              targetLane: lane,
+              x: lx,
+              y: -75,
+              w: Math.min(34, laneWidth * 0.56),
+              h: 64,
+              speedOffset: -135,
+              color: '#ff0055',
+              lungeState: 'stalk', // 'stalk' -> 'telegraph' -> 'lunge' -> 'done'
+              lungeTimer: 0.7 + Math.random() * 0.5,
+              grazed: false,
+              hp: 45
+            });
+          } else if (roll < 0.42) {
+            // Pulsing Laser Barrier
+            obstacles.push({
+              id: nextObsId++,
+              type: 'barrier',
+              lane: lane,
+              x: lx,
+              y: -50,
+              w: laneWidth * 0.84,
+              h: 20,
+              speedOffset: 0,
+              color: '#ff3b30',
+              pulsePhase: Math.random() * 6,
+              grazed: false,
+              hp: 30
+            });
+          } else {
+            // Cyber Traffic Cruiser
+            const cruiserColors = ['#ff007f', '#b829ff', '#ff8800', '#38bdf8'];
+            obstacles.push({
+              id: nextObsId++,
+              type: 'cruiser',
+              lane: lane,
+              x: lx,
+              y: -75,
+              w: Math.min(34, laneWidth * 0.56),
+              h: 64,
+              speedOffset: -(140 + Math.random() * 115),
+              color: cruiserColors[Math.floor(Math.random() * cruiserColors.length)],
+              grazed: false,
+              hp: 35
+            });
+          }
+        }
+
+        // Spawn Data Shards or a Power-Up Capsule in one of the open lanes
+        const openLane = laneIndices[count];
+        const openX = getLaneCenterX(openLane);
+        if (Math.random() < 0.24 && capsules.length < 3) {
+          capsules.push({
+            x: openX,
+            y: -45,
+            radius: 16,
+            type: chooseRandomPowerupType(),
+            pulse: 0
+          });
+        } else {
+          const streak = 3 + Math.floor(Math.random() * 3);
+          for (let s = 0; s < streak; s++) {
+            shards.push({
+              x: openX,
+              y: -45 - s * 42,
+              radius: 9,
+              pulse: s * 0.6
+            });
+          }
+        }
+      }
+
+      function spawnOmegaJuggernaut() {
+        const maxHp = 1800 + (sector - 1) * 750;
+        boss = {
+          name: 'OMEGA JUGGERNAUT MK-' + sector,
+          centerLane: 2,
+          targetLane: 2,
+          x: getLaneCenterX(2),
+          y: -140,
+          targetY: viewH < 640 ? 155 : 175,
+          w: laneWidth * 2.65,
+          h: 112,
+          hp: maxHp,
+          maxHp: maxHp,
+          moveTimer: 2.2,
+          attackTimer: 1.8,
+          cannonState: 'idle', // 'idle' | 'telegraph'
+          cannonTimer: 0,
+          targetLanes: [],
+          hitFlash: 0
+        };
+
+        sfx.bossSiren();
+        triggerShake(0.45, 10);
+        showSectorToast('⚠ BOSS INTERCEPT ⚠', boss.name);
+
+        // Immediately grant Twin Railguns if player doesn't have them so Boss combat is always active & fun!
+        if (!activeTimers.railgun) {
+          activeTimers.railgun = { remaining: 8.0, duration: 8.0 };
+          renderActivePowerupsHUD();
+        }
+        updateHUD();
+      }
+
+      function damageBoss(amount, color) {
+        if (!boss) return;
+        boss.hp -= amount;
+        boss.hitFlash = 0.08;
+        spawnPopup(boss.x + (Math.random() - 0.5) * 60, boss.y + 30, '-' + Math.round(amount), color || '#ff007f', 1.15);
+
+        if (boss.hp <= 0) {
+          const bx = boss.x;
+          const by = boss.y;
+          const clearBonus = 2500 * sector;
+          boss = null;
+          bossProjectiles.length = 0;
+          bossMines.length = 0;
+
+          sfx.explosion(true);
+          triggerShake(0.65, 16);
+          triggerFlash('#00f3ff', 0.38);
+          spawnParticles(bx, by, '#ff007f', 48, 1.5);
+          spawnParticles(bx, by, '#00f3ff', 48, 1.5);
+          spawnParticles(bx, by, '#ffea00', 36, 1.4);
+
+          shockwaves.push({
+            x: bx,
+            y: by,
+            radius: 25,
+            maxRadius: 650,
+            color: '#00f3ff',
+            life: 0.65,
+            maxLife: 0.65
+          });
+
+          addScore(clearBonus, bx, by, '#ffea00', 'BOSS DESTROYED +' + clearBonus * combo);
+          sector++;
+          nextBossDistM = distanceM + SECTOR_INTERVAL_M;
+          showSectorToast('BOSS OBLITERATED', 'SECTOR ' + sector);
+        }
+        updateHUD();
+      }
+
+      // =========================================================================
+      // 8. COLLISIONS, NEAR-MISS ("GRAZE") & PLAYER DAMAGE
+      // =========================================================================
+      function checkRectOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+        return (
+          Math.abs(ax - bx) * 2 < aw + bw &&
+          Math.abs(ay - by) * 2 < ah + bh
+        );
+      }
+
+      function handlePlayerCrash(sourceX, sourceY) {
+        if (player.invulnTimer > 0) return;
+
+        // 1. Hyper Nitro or Overdrive smashes right through hazards!
+        if (isHyperInvulnerable()) {
+          sfx.explosion(false);
+          triggerShake(0.22, 7);
+          spawnParticles(sourceX, sourceY, '#ffea00', 22, 1.2);
+          addScore(300, sourceX, sourceY - 16, '#ffea00', 'NITRO SMASH +' + 300 * combo);
+          return;
+        }
+
+        // 2. Aegis Shield absorbs the impact and bashes hazards away
+        if (activeTimers.shield) {
+          delete activeTimers.shield;
+          renderActivePowerupsHUD();
+          player.invulnTimer = 0.85;
+          sfx.explosion(false);
+          triggerShake(0.28, 9);
+          triggerFlash('#00ff88', 0.25);
+          spawnParticles(sourceX, sourceY, '#00ff88', 26, 1.25);
+          addScore(250, player.x, player.y - 32, '#00ff88', 'AEGIS BASH +' + 250 * combo);
+          return;
+        }
+
+        // 3. Hull Damaged -> Deduct 1 Hull Integrity, 1.2s i-Frames & Clearing Shockwave
+        hull = Math.max(0, hull - 1);
+        combo = 1;
+        comboTimer = 0;
+        player.invulnTimer = 1.2;
+
+        renderHullHearts();
+        updateHUD();
+
+        sfx.explosion(true);
+        triggerShake(0.45, 13);
+        triggerFlash('#ff0044', 0.34);
+        spawnParticles(player.x, player.y, '#ff0055', 32, 1.3);
+        spawnPopup(player.x, player.y - 36, 'HULL BREACH! -1 LIFE', '#ff0055', 1.2);
+
+        const clearR = 230;
+        shockwaves.push({
+          x: player.x,
+          y: player.y,
+          radius: 18,
+          maxRadius: clearR,
+          color: '#ff0055',
+          life: 0.4,
+          maxLife: 0.4
+        });
+
+        // Clear immediate nearby obstacles & projectiles so player cannot double-crash
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          if (Math.hypot(obstacles[i].x - player.x, obstacles[i].y - player.y) <= clearR) {
+            spawnParticles(obstacles[i].x, obstacles[i].y, obstacles[i].color, 10, 0.9);
+            obstacles.splice(i, 1);
+          }
+        }
+        for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+          if (Math.hypot(bossProjectiles[i].x - player.x, bossProjectiles[i].y - player.y) <= clearR) {
+            bossProjectiles.splice(i, 1);
+          }
+        }
+        for (let i = bossMines.length - 1; i >= 0; i--) {
+          if (Math.hypot(bossMines[i].x - player.x, bossMines[i].y - player.y) <= clearR) {
+            bossMines.splice(i, 1);
+          }
+        }
+
+        if (hull <= 0) {
+          triggerGameOver();
+        }
+      }
+
+      // =========================================================================
+      // 9. SIMULATION UPDATE LOOP (60 FPS DELTA-TIME)
+      // =========================================================================
+      function update(dt) {
+        // Update visual effects in all states
+        for (let i = 0; i < MAX_PARTICLES; i++) {
+          const p = particles[i];
+          if (!p.active) continue;
+          p.life -= dt;
+          if (p.life <= 0) {
+            p.active = false;
+          } else {
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.vx *= 0.94;
+            p.vy *= 0.94;
+          }
+        }
+
+        for (let i = shockwaves.length - 1; i >= 0; i--) {
+          shockwaves[i].life -= dt;
+          if (shockwaves[i].life <= 0) shockwaves.splice(i, 1);
+        }
+
+        for (let i = grazeArcs.length - 1; i >= 0; i--) {
+          grazeArcs[i].life -= dt;
+          if (grazeArcs[i].life <= 0) grazeArcs.splice(i, 1);
+        }
+
+        for (let i = popups.length - 1; i >= 0; i--) {
+          popups[i].y += popups[i].vy * dt;
+          popups[i].life -= dt;
+          if (popups[i].life <= 0) popups.splice(i, 1);
+        }
+
+        if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
+        if (flashAlpha > 0) flashAlpha = Math.max(0, flashAlpha - dt * 1.2);
+        if (sectorToastTimer > 0) {
+          sectorToastTimer -= dt;
+          if (sectorToastTimer <= 0) document.getElementById('sectorToast').classList.add('hidden');
+        }
+
+        // Scroll road background subtly on Menu screen
+        if (gameState === 'MENU') {
+          roadScrollY = (roadScrollY + 260 * dt) % 90;
+          updateContinuousAudio(false, 0, 0);
+          return;
+        }
+
+        if (gameState !== 'PLAYING') {
+          updateContinuousAudio(false, 0, 0);
+          return;
+        }
+
+        // 1. Power-Up & Overdrive Countdowns
+        if (player.invulnTimer > 0) player.invulnTimer = Math.max(0, player.invulnTimer - dt);
+
+        if (overdriveTimer > 0) {
+          overdriveTimer = Math.max(0, overdriveTimer - dt);
+        }
+
+        let hudTimersChanged = false;
+        for (const k of Object.keys(activeTimers)) {
+          activeTimers[k].remaining -= dt;
+          hudTimersChanged = true;
+          if (activeTimers[k].remaining <= 0) {
+            delete activeTimers[k];
+          }
+        }
+        if (hudTimersChanged) renderActivePowerupsHUD();
+
+        // Combo Decay Timer
+        if (combo > 1 && comboTimer > 0) {
+          comboTimer = Math.max(0, comboTimer - dt);
+          document.getElementById('comboTimerFill').style.width = ((comboTimer / COMBO_WINDOW_SEC) * 100).toFixed(1) + '%';
+          if (comboTimer === 0) {
+            combo = 1;
+          }
+        }
+
+        // 2. Forward Highway Speed, Distance & Sector Progression
+        const baseCruise = 540 + Math.min(260, (sector - 1) * 32);
+        let throttleMult = 1.0;
+        if (keys.ArrowUp || keys.KeyW) throttleMult = 1.28;
+        else if (keys.ArrowDown || keys.KeyS) throttleMult = 0.72;
+
+        const nitroMult = isHyperInvulnerable() ? 1.55 : 1.0;
+        const roadSpeed = baseCruise * throttleMult * nitroMult;
+
+        roadScrollY = (roadScrollY + roadSpeed * dt) % 90;
+        const deltaMeters = (roadSpeed * dt) / 14;
+        distanceM += deltaMeters;
+        score += deltaMeters * 0.8 * combo * (overdriveTimer > 0 ? 2 : 1);
+        if (score > highScore) {
+          highScore = Math.floor(score);
+          safeSetHighScore(highScore);
+        }
+
+        const displayKmh = Math.round((roadSpeed / 540) * 240);
+        const speedEl = document.getElementById('speedVal');
+        if (speedEl) speedEl.textContent = displayKmh + ' KM/H';
+
+        // Spawn Omega Juggernaut Boss every 1,500m
+        if (!boss && distanceM >= nextBossDistM) {
+          spawnOmegaJuggernaut();
+        }
+
+        // 3. Player Horizontal Steering, Tilt & Drift Skid Trails
+        let steerInput = 0;
+        if (keys.ArrowLeft || keys.KeyA || touchBtns.left) steerInput -= 1;
+        if (keys.ArrowRight || keys.KeyD || touchBtns.right) steerInput += 1;
+
+        const maxSteerSpeed = 520;
+        if (steerInput !== 0) {
+          player.vx += (steerInput * maxSteerSpeed - player.vx) * 14 * dt;
+        } else if (!dragControl.active) {
+          player.vx *= Math.pow(0.002, dt);
+        }
+
+        player.x += player.vx * dt;
+        const minX = roadLeft + player.hitboxW * 0.65;
+        const maxX = roadRight - player.hitboxW * 0.65;
+        if (player.x < minX) {
+          player.x = minX;
+          player.vx = 0;
+        } else if (player.x > maxX) {
+          player.x = maxX;
+          player.vx = 0;
+        }
+
+        const targetTilt = Math.max(-0.28, Math.min(0.28, (player.vx / maxSteerSpeed) * 0.28));
+        player.tilt += (targetTilt - player.tilt) * 14 * dt;
+        player.thrustOffset += dt * 32;
+
+        // Emit Neon Tire-Drift Trails when turning sharply
+        const driftRatio = Math.min(1, Math.abs(player.vx) / maxSteerSpeed);
+        if (driftRatio > 0.35) {
+          const tireColor = isHyperInvulnerable() ? '#ffea00' : '#00f3ff';
+          skidTrails.push({
+            x1: player.x - 11,
+            x2: player.x + 11,
+            y: player.y + 24,
+            color: tireColor,
+            life: 0.32,
+            maxLife: 0.32
+          });
+          if (skidTrails.length > MAX_SKIDS) skidTrails.shift();
+        }
+
+        // Scroll existing skid trails down with the road
+        for (let i = skidTrails.length - 1; i >= 0; i--) {
+          skidTrails[i].y += roadSpeed * dt;
+          skidTrails[i].life -= dt;
+          if (skidTrails[i].life <= 0) skidTrails.splice(i, 1);
+        }
+
+        // Update Equalizer Shoulder Pylons & Engine/Drift Synth
+        for (let i = 0; i < eqBarsLeft.length; i++) {
+          eqBarsLeft[i] = 0.25 + 0.75 * Math.abs(Math.sin(distanceM * 0.08 + i * 0.65));
+          eqBarsRight[i] = 0.25 + 0.75 * Math.abs(Math.cos(distanceM * 0.08 + i * 0.65));
+        }
+        updateContinuousAudio(true, Math.min(1.5, roadSpeed / 700), driftRatio);
+
+        // 4. Twin Railguns Auto-Fire
+        if (activeTimers.railgun) {
+          player.railgunCooldown -= dt;
+          if (player.railgunCooldown <= 0) {
+            player.railgunCooldown = 0.14;
+            sfx.railgun();
+            playerBolts.push(
+              { x: player.x - 12, y: player.y - 26, vy: -980, damage: 28 },
+              { x: player.x + 12, y: player.y - 26, vy: -980, damage: 28 }
+            );
+          }
+        }
+
+        // Update Player Railgun Bolts
+        for (let i = playerBolts.length - 1; i >= 0; i--) {
+          const b = playerBolts[i];
+          b.y += b.vy * dt;
+          if (b.y < -30) {
+            playerBolts.splice(i, 1);
+            continue;
+          }
+
+          let hit = false;
+
+          // Check Boss Hit
+          if (boss && checkRectOverlap(b.x, b.y, 6, 22, boss.x, boss.y, boss.w, boss.h)) {
+            hit = true;
+            spawnParticles(b.x, b.y, '#ff007f', 6, 0.8);
+            damageBoss(b.damage, '#ff007f');
+          }
+
+          // Check Obstacles Hit
+          if (!hit) {
+            for (let o = obstacles.length - 1; o >= 0; o--) {
+              const obs = obstacles[o];
+              if (checkRectOverlap(b.x, b.y, 6, 22, obs.x, obs.y, obs.w, obs.h)) {
+                hit = true;
+                obs.hp -= b.damage;
+                spawnParticles(b.x, b.y, '#ff007f', 5, 0.75);
+                if (obs.hp <= 0) {
+                  sfx.explosion(false);
+                  spawnParticles(obs.x, obs.y, obs.color, 18, 1.0);
+                  addScore(150, obs.x, obs.y, '#ff007f');
+                  obstacles.splice(o, 1);
+                }
+                break;
+              }
+            }
+          }
+
+          // Check Boss Mines Hit
+          if (!hit) {
+            for (let m = bossMines.length - 1; m >= 0; m--) {
+              if (Math.hypot(b.x - bossMines[m].x, b.y - bossMines[m].y) <= bossMines[m].radius + 6) {
+                hit = true;
+                spawnParticles(bossMines[m].x, bossMines[m].y, '#ff7b00', 10, 0.9);
+                bossMines.splice(m, 1);
+                break;
+              }
+            }
+          }
+
+          if (hit) playerBolts.splice(i, 1);
+        }
+
+        // 5. Traffic & Boss Supply Spawners
+        const enemyTimeScale = activeTimers.chrono ? 0.5 : 1.0;
+
+        if (!boss) {
+          spawnTimer -= dt * (roadSpeed / 540);
+          if (spawnTimer <= 0) {
+            spawnTimer = Math.max(0.46, 0.98 - sector * 0.045);
+            spawnTrafficWave();
+          }
+        } else {
+          // During Boss battles, actively spawn Weapon Overcharge Pods & Overdrive Cells in open lanes!
+          bossSupplyTimer -= dt;
+          if (bossSupplyTimer <= 0) {
+            bossSupplyTimer = 2.6;
+            const lane = Math.floor(Math.random() * LANE_COUNT);
+            const podType = Math.random() < 0.55 ? 'railgun' : Math.random() < 0.7 ? 'overdriveCell' : 'emp';
+            capsules.push({
+              x: getLaneCenterX(lane),
+              y: -35,
+              radius: 16,
+              type: podType,
+              pulse: 0
+            });
+          }
+        }
+
+        // 6. Update Obstacles, Hunter Lunges, Near-Miss ("Graze") & Collisions
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          const obs = obstacles[i];
+
+          if (obs.type === 'barrier') {
+            obs.y += roadSpeed * dt * enemyTimeScale;
+            obs.pulsePhase += dt * 10;
+          } else {
+            const relSpeed = Math.max(160, roadSpeed + obs.speedOffset);
+            obs.y += relSpeed * dt * enemyTimeScale;
+          }
+
+          // Hunter Police Interceptor AI (Telegraphs lane lunge with red beam)
+          if (obs.type === 'hunter') {
+            if (obs.lungeState === 'stalk' && obs.y > 75 && obs.y < player.y - 160) {
+              const playerLane = Math.max(0, Math.min(LANE_COUNT - 1, Math.floor((player.x - roadLeft) / laneWidth)));
+              if (playerLane !== obs.lane) {
+                obs.targetLane = playerLane;
+                obs.lungeState = 'telegraph';
+                obs.lungeTimer = 0.65;
+              }
+            } else if (obs.lungeState === 'telegraph') {
+              obs.lungeTimer -= dt * enemyTimeScale;
+              if (obs.lungeTimer <= 0) {
+                obs.lungeState = 'lunge';
+              }
+            } else if (obs.lungeState === 'lunge') {
+              const targetX = getLaneCenterX(obs.targetLane);
+              obs.x += (targetX - obs.x) * 9 * dt * enemyTimeScale;
+              if (Math.abs(targetX - obs.x) < 2) {
+                obs.x = targetX;
+                obs.lane = obs.targetLane;
+                obs.lungeState = 'done';
+              }
+            }
+          }
+
+          if (obs.y > viewH + 100) {
+            obstacles.splice(i, 1);
+            continue;
+          }
+
+          // Direct Collision Check
+          if (checkRectOverlap(player.x, player.y, player.hitboxW, player.hitboxH, obs.x, obs.y, obs.w, obs.h)) {
+            const ox = obs.x;
+            const oy = obs.y;
+            obstacles.splice(i, 1);
+            handlePlayerCrash(ox, oy);
+            continue;
+          }
+
+          // Near-Miss ("GRAZE") Check (within 26px outside hitbox without crashing!)
+          if (
+            !obs.grazed &&
+            checkRectOverlap(
+              player.x,
+              player.y,
+              player.hitboxW + GRAZE_MARGIN_PX * 2,
+              player.hitboxH + GRAZE_MARGIN_PX * 2,
+              obs.x,
+              obs.y,
+              obs.w,
+              obs.h
+            )
+          ) {
+            obs.grazed = true;
+            bumpCombo();
+            if (overdriveTimer <= 0) {
+              overdriveCharge = Math.min(100, overdriveCharge + 15);
+            }
+            sfx.nearMiss(combo);
+            grazeArcs.push({
+              x1: player.x,
+              y1: player.y,
+              x2: obs.x,
+              y2: obs.y,
+              life: 0.22,
+              maxLife: 0.22
+            });
+            spawnParticles((player.x + obs.x) * 0.5, (player.y + obs.y) * 0.5, '#00f3ff', 8, 0.85);
+            addScore(150, player.x, player.y - 34, '#00f3ff', 'NEAR MISS! +' + 150 * combo);
+          }
+        }
+
+        // 7. Update OMEGA JUGGERNAUT Boss Truck
+        if (boss) {
+          if (boss.hitFlash > 0) boss.hitFlash = Math.max(0, boss.hitFlash - dt);
+
+          // Enter from top highway
+          if (boss.y < boss.targetY) {
+            boss.y += 160 * dt;
+          } else {
+            // Lateral lane-patrol movement
+            boss.moveTimer -= dt * enemyTimeScale;
+            if (boss.moveTimer <= 0) {
+              boss.moveTimer = 2.1;
+              boss.targetLane = 1 + Math.floor(Math.random() * 3); // Center lanes 1, 2, or 3 so 3-wide truck stays on highway
+            }
+            const destX = getLaneCenterX(boss.targetLane);
+            boss.x += (destX - boss.x) * 3.2 * dt * enemyTimeScale;
+
+            // Twin Laser Cannons & Mine Drops
+            boss.attackTimer -= dt * enemyTimeScale;
+            if (boss.cannonState === 'idle' && boss.attackTimer <= 0) {
+              boss.cannonState = 'telegraph';
+              boss.cannonTimer = 0.85;
+              // Target 2 lanes near player
+              const pLane = Math.max(0, Math.min(LANE_COUNT - 1, Math.floor((player.x - roadLeft) / laneWidth)));
+              const secondLane = (pLane + (Math.random() < 0.5 ? 1 : 2)) % LANE_COUNT;
+              boss.targetLanes = [pLane, secondLane];
+            } else if (boss.cannonState === 'telegraph') {
+              boss.cannonTimer -= dt * enemyTimeScale;
+              if (boss.cannonTimer <= 0) {
+                boss.cannonState = 'idle';
+                boss.attackTimer = Math.max(1.3, 2.2 - sector * 0.12);
+
+                // Fire heavy plasma cannon bolts down targeted lanes
+                for (let t = 0; t < boss.targetLanes.length; t++) {
+                  const tx = getLaneCenterX(boss.targetLanes[t]);
+                  bossProjectiles.push({
+                    x: tx,
+                    y: boss.y + boss.h * 0.48,
+                    vy: 540 + sector * 25,
+                    radius: 9
+                  });
+                }
+
+                // Drop a pulsing plasma mine in a third lane
+                const mineLane = Math.floor(Math.random() * LANE_COUNT);
+                bossMines.push({
+                  x: getLaneCenterX(mineLane),
+                  y: boss.y + boss.h * 0.5,
+                  radius: 14,
+                  pulse: 0
+                });
+              }
+            }
+          }
+
+          // Player-Boss Collision / Ramming Resolution
+          if (checkRectOverlap(player.x, player.y, player.hitboxW, player.hitboxH, boss.x, boss.y, boss.w, boss.h)) {
+            if (isHyperInvulnerable()) {
+              // Hyper Nitro / Overdrive ram deals massive damage & bounces player cleanly below Boss!
+              sfx.explosion(true);
+              triggerShake(0.35, 11);
+              spawnParticles(player.x, boss.y + boss.h * 0.5, '#ffea00', 26, 1.3);
+              damageBoss(340, '#ffea00');
+              player.invulnTimer = 0.45;
+            } else if (activeTimers.shield) {
+              delete activeTimers.shield;
+              renderActivePowerupsHUD();
+              sfx.explosion(true);
+              triggerShake(0.3, 9);
+              spawnParticles(player.x, boss.y + boss.h * 0.5, '#00ff88', 22, 1.2);
+              damageBoss(200, '#00ff88');
+              player.invulnTimer = 0.7;
+            } else {
+              handlePlayerCrash(player.x, boss.y + boss.h * 0.5);
+            }
+          }
+        }
+
+        // Update Boss Projectiles & Mines
+        for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+          const bp = bossProjectiles[i];
+          bp.y += bp.vy * dt * enemyTimeScale;
+          if (bp.y > viewH + 40) {
+            bossProjectiles.splice(i, 1);
+            continue;
+          }
+          if (Math.hypot(bp.x - player.x, bp.y - player.y) <= bp.radius + player.hitboxW * 0.5) {
+            bossProjectiles.splice(i, 1);
+            handlePlayerCrash(bp.x, bp.y);
+          }
+        }
+
+        for (let i = bossMines.length - 1; i >= 0; i--) {
+          const bm = bossMines[i];
+          bm.y += roadSpeed * 0.85 * dt * enemyTimeScale;
+          bm.pulse += dt * 10;
+          if (bm.y > viewH + 40) {
+            bossMines.splice(i, 1);
+            continue;
+          }
+          if (Math.hypot(bm.x - player.x, bm.y - player.y) <= bm.radius + player.hitboxW * 0.5) {
+            bossMines.splice(i, 1);
+            handlePlayerCrash(bm.x, bm.y);
+          }
+        }
+
+        // 8. Update Data Shards & Power-Up Capsules (with Mag-Field pull)
+        const magActive = Boolean(activeTimers.magnet) || overdriveTimer > 0;
+
+        for (let i = shards.length - 1; i >= 0; i--) {
+          const s = shards[i];
+          s.pulse += dt * 6;
+          if (magActive) {
+            const dx = player.x - s.x;
+            const dy = player.y - s.y;
+            const dist = Math.max(1, Math.hypot(dx, dy));
+            s.x += (dx / dist) * 680 * dt;
+            s.y += (dy / dist) * 680 * dt;
+          } else {
+            s.y += roadSpeed * dt;
+          }
+
+          if (s.y > viewH + 40) {
+            shards.splice(i, 1);
+            continue;
+          }
+
+          if (Math.hypot(s.x - player.x, s.y - player.y) <= s.radius + player.hitboxW * 0.72) {
+            shards.splice(i, 1);
+            sfx.shard();
+            if (combo > 1) comboTimer = Math.max(comboTimer, COMBO_WINDOW_SEC * 0.75);
+            if (overdriveTimer <= 0) {
+              overdriveCharge = Math.min(100, overdriveCharge + 3);
+            }
+            spawnParticles(s.x, s.y, '#00f3ff', 6, 0.7);
+            addScore(50, s.x, s.y - 10, '#00f3ff');
+          }
+        }
+
+        for (let i = capsules.length - 1; i >= 0; i--) {
+          const cap = capsules[i];
+          cap.pulse += dt * 5;
+          if (magActive) {
+            const dx = player.x - cap.x;
+            const dy = player.y - cap.y;
+            const dist = Math.max(1, Math.hypot(dx, dy));
+            cap.x += (dx / dist) * 580 * dt;
+            cap.y += (dy / dist) * 580 * dt;
+          } else {
+            cap.y += roadSpeed * 0.9 * dt;
+          }
+
+          if (cap.y > viewH + 50) {
+            capsules.splice(i, 1);
+            continue;
+          }
+
+          if (Math.hypot(cap.x - player.x, cap.y - player.y) <= cap.radius + player.hitboxW * 0.75) {
+            capsules.splice(i, 1);
+            collectCapsule(cap);
+          }
+        }
+
+        updateHUD();
+      }
+
+      // =========================================================================
+      // 10. DUAL-PASS ADDITIVE VECTOR NEON RENDERER (Locked 60 FPS)
+      // =========================================================================
+      function drawDualStroke(buildPathFn, color, outerWidth, innerWidth, whiteCore) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Pass 1: Wide additive outer glow
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.34;
+        ctx.lineWidth = outerWidth;
+        ctx.beginPath();
+        buildPathFn();
+        ctx.stroke();
+
+        // Pass 2: Crisp bright inner core
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = innerWidth;
+        ctx.beginPath();
+        buildPathFn();
+        ctx.stroke();
+
+        if (whiteCore) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = Math.max(1, innerWidth * 0.42);
+          ctx.beginPath();
+          buildPathFn();
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawHighway(nowSec) {
+        // Deep cyberpunk void (#05050a)
+        ctx.fillStyle = '#05050a';
+        ctx.fillRect(0, 0, viewW, viewH);
+
+        // Subtle outer horizon grid
+        ctx.strokeStyle = 'rgba(184, 41, 255, 0.06)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let y = roadScrollY % 45; y < viewH; y += 45) {
+          ctx.moveTo(0, y);
+          ctx.lineTo(roadLeft, y);
+          ctx.moveTo(roadRight, y);
+          ctx.lineTo(viewW, y);
+        }
+        ctx.stroke();
+
+        // Asphalt surface fill
+        ctx.fillStyle = '#090914';
+        ctx.fillRect(roadLeft, 0, roadWidth, viewH);
+
+        // Speed-reactive horizontal grid lines across the 5 lanes
+        ctx.strokeStyle = activeTimers.chrono ? 'rgba(56, 189, 248, 0.14)' : 'rgba(0, 243, 255, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let y = roadScrollY - 90; y < viewH; y += 45) {
+          ctx.moveTo(roadLeft, y);
+          ctx.lineTo(roadRight, y);
+        }
+        ctx.stroke();
+
+        // 4 Inner Lane Dividers (Dashed neon cyan lines)
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0, 243, 255, 0.28)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([34, 56]);
+        ctx.lineDashOffset = -roadScrollY;
+        ctx.beginPath();
+        for (let l = 1; l < LANE_COUNT; l++) {
+          const lx = roadLeft + l * laneWidth;
+          ctx.moveTo(lx, 0);
+          ctx.lineTo(lx, viewH);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Glowing Left (Cyan) & Right (Magenta) Guardrails
+        drawDualStroke(
+          function () {
+            ctx.moveTo(roadLeft, 0);
+            ctx.lineTo(roadLeft, viewH);
+          },
+          '#00f3ff',
+          10,
+          3,
+          true
+        );
+
+        drawDualStroke(
+          function () {
+            ctx.moveTo(roadRight, 0);
+            ctx.lineTo(roadRight, viewH);
+          },
+          '#ff007f',
+          10,
+          3,
+          true
+        );
+
+        // Pulsing Equalizer Pylons along outer shoulders
+        if (viewW >= 420) {
+          const stepY = viewH / eqBarsLeft.length;
+          for (let i = 0; i < eqBarsLeft.length; i++) {
+            const by = i * stepY + stepY * 0.3;
+            const bh = Math.max(4, stepY * 0.42);
+            const lw = 8 + eqBarsLeft[i] * 26;
+            const rw = 8 + eqBarsRight[i] * 26;
+
+            ctx.fillStyle = 'rgba(0, 243, 255, 0.32)';
+            ctx.fillRect(roadLeft - 10 - lw, by, lw, bh);
+            ctx.fillStyle = 'rgba(255, 0, 127, 0.32)';
+            ctx.fillRect(roadRight + 10, by, rw, bh);
+          }
+        }
+      }
+
+      function drawObstacles(nowSec) {
+        for (let i = 0; i < obstacles.length; i++) {
+          const obs = obstacles[i];
+
+          // Telegraphed red targeting beam for Hunter Police Interceptors
+          if (obs.type === 'hunter' && obs.lungeState === 'telegraph') {
+            const targetX = getLaneCenterX(obs.targetLane);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 0, 85, 0.85)';
+            ctx.setLineDash([8, 6]);
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(obs.x, obs.y);
+            ctx.lineTo(targetX, obs.y + 180);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          ctx.save();
+          ctx.translate(obs.x, obs.y);
+
+          if (obs.type === 'barrier') {
+            const hw = obs.w * 0.5;
+            const hh = obs.h * 0.5;
+            // Side emitter pylons
+            ctx.fillStyle = '#1e1b2e';
+            ctx.fillRect(-hw, -hh, 10, obs.h);
+            ctx.fillRect(hw - 10, -hh, 10, obs.h);
+
+            // Pulsing horizontal plasma beam
+            const pulseW = 3 + Math.sin(obs.pulsePhase) * 1.4;
+            drawDualStroke(
+              function () {
+                ctx.moveTo(-hw + 8, 0);
+                ctx.lineTo(hw - 8, 0);
+              },
+              obs.color,
+              11,
+              pulseW,
+              true
+            );
+          } else {
+            // Cyber Traffic Cruiser or Hunter Police Interceptor
+            const hw = obs.w * 0.5;
+            const hh = obs.h * 0.5;
+
+            // Dark chassis fill
+            ctx.fillStyle = '#090916';
+            ctx.beginPath();
+            ctx.moveTo(-hw * 0.72, -hh);
+            ctx.lineTo(hw * 0.72, -hh);
+            ctx.lineTo(hw, -hh * 0.35);
+            ctx.lineTo(hw, hh * 0.85);
+            ctx.lineTo(hw * 0.78, hh);
+            ctx.lineTo(-hw * 0.78, hh);
+            ctx.lineTo(-hw, hh * 0.85);
+            ctx.lineTo(-hw, -hh * 0.35);
+            ctx.closePath();
+            ctx.fill();
+
+            drawDualStroke(
+              function () {
+                ctx.moveTo(-hw * 0.72, -hh);
+                ctx.lineTo(hw * 0.72, -hh);
+                ctx.lineTo(hw, -hh * 0.35);
+                ctx.lineTo(hw, hh * 0.85);
+                ctx.lineTo(hw * 0.78, hh);
+                ctx.lineTo(-hw * 0.78, hh);
+                ctx.lineTo(-hw, hh * 0.85);
+                ctx.lineTo(-hw, -hh * 0.35);
+                ctx.closePath();
+              },
+              obs.color,
+              8,
+              2.2,
+              false
+            );
+
+            // Rear taillights
+            ctx.fillStyle = '#ff0044';
+            ctx.fillRect(-hw * 0.68, hh - 4, 8, 3);
+            ctx.fillRect(hw * 0.68 - 8, hh - 4, 8, 3);
+
+            // Flashing red/blue siren bar on Hunter Police Interceptors
+            if (obs.type === 'hunter') {
+              const sirenFlip = Math.sin(nowSec * 22) > 0;
+              ctx.fillStyle = sirenFlip ? '#ff0044' : '#00f3ff';
+              ctx.fillRect(-hw * 0.55, -3, hw * 0.55, 5);
+              ctx.fillStyle = sirenFlip ? '#00f3ff' : '#ff0044';
+              ctx.fillRect(0, -3, hw * 0.55, 5);
+            }
+          }
+
+          ctx.restore();
+        }
+      }
+
+      function drawOmegaJuggernaut(nowSec) {
+        if (!boss) return;
+
+        // Telegraphed vertical cannon warning beams
+        if (boss.cannonState === 'telegraph') {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255, 0, 85, 0.75)';
+          ctx.setLineDash([12, 10]);
+          ctx.lineWidth = 3;
+          for (let t = 0; t < boss.targetLanes.length; t++) {
+            const tx = getLaneCenterX(boss.targetLanes[t]);
+            ctx.beginPath();
+            ctx.moveTo(tx, boss.y + boss.h * 0.45);
+            ctx.lineTo(tx, viewH);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        ctx.save();
+        ctx.translate(boss.x, boss.y);
+
+        const hw = boss.w * 0.5;
+        const hh = boss.h * 0.5;
+        const mainColor = boss.hitFlash > 0 ? '#ffffff' : '#ff0055';
+
+        // Armored war-rig hull fill
+        ctx.fillStyle = '#120614';
+        ctx.beginPath();
+        ctx.moveTo(-hw * 0.86, -hh);
+        ctx.lineTo(hw * 0.86, -hh);
+        ctx.lineTo(hw, -hh * 0.55);
+        ctx.lineTo(hw, hh * 0.72);
+        ctx.lineTo(hw * 0.78, hh);
+        ctx.lineTo(-hw * 0.78, hh);
+        ctx.lineTo(-hw, hh * 0.72);
+        ctx.lineTo(-hw, -hh * 0.55);
+        ctx.closePath();
+        ctx.fill();
+
+        drawDualStroke(
+          function () {
+            ctx.moveTo(-hw * 0.86, -hh);
+            ctx.lineTo(hw * 0.86, -hh);
+            ctx.lineTo(hw, -hh * 0.55);
+            ctx.lineTo(hw, hh * 0.72);
+            ctx.lineTo(hw * 0.78, hh);
+            ctx.lineTo(-hw * 0.78, hh);
+            ctx.lineTo(-hw, hh * 0.72);
+            ctx.lineTo(-hw, -hh * 0.55);
+            ctx.closePath();
+          },
+          mainColor,
+          12,
+          3.4,
+          true
+        );
+
+        // Pulsing Reactor Core & Twin Laser Turrets
+        const pulseR = 14 + Math.sin(nowSec * 10) * 3;
+        drawDualStroke(
+          function () {
+            ctx.arc(0, 4, pulseR, 0, Math.PI * 2);
+          },
+          '#ffea00',
+          8,
+          2.2,
+          false
+        );
+
+        ctx.fillStyle = '#ff007f';
+        ctx.fillRect(-hw * 0.65, hh - 10, 14, 16);
+        ctx.fillRect(hw * 0.65 - 14, hh - 10, 14, 16);
+
+        ctx.restore();
+      }
+
+      function drawShardsAndCapsules(nowSec) {
+        // Data Shards
+        for (let i = 0; i < shards.length; i++) {
+          const s = shards[i];
+          ctx.save();
+          ctx.translate(s.x, s.y);
+          ctx.rotate(Math.sin(s.pulse) * 0.35);
+          drawDualStroke(
+            function () {
+              ctx.moveTo(0, -s.radius);
+              ctx.lineTo(s.radius * 0.72, 0);
+              ctx.lineTo(0, s.radius);
+              ctx.lineTo(-s.radius * 0.72, 0);
+              ctx.closePath();
+            },
+            '#00f3ff',
+            6,
+            2,
+            true
+          );
+          ctx.restore();
+        }
+
+        // Power-Up Capsules & Boss Supply Pods
+        for (let i = 0; i < capsules.length; i++) {
+          const cap = capsules[i];
+          const isOdCell = cap.type === 'overdriveCell';
+          const def = isOdCell ? { short: 'OD+', color: '#ffea00' } : POWERUPS[cap.type];
+          if (!def) continue;
+
+          ctx.save();
+          ctx.translate(cap.x, cap.y);
+
+          ctx.fillStyle = '#080814';
+          ctx.beginPath();
+          ctx.arc(0, 0, cap.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          drawDualStroke(
+            function () {
+              ctx.arc(0, 0, cap.radius, 0, Math.PI * 2);
+            },
+            def.color,
+            8,
+            2.2,
+            false
+          );
+
+          ctx.font = '900 8.5px Orbitron, Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = def.color;
+          ctx.fillText(def.short, 0, 0.5);
+
+          ctx.restore();
+        }
+      }
+
+      function drawPlayerInterceptor(nowSec) {
+        // Neon Tire-Drift Skid Trails
+        for (let i = 0; i < skidTrails.length; i++) {
+          const st = skidTrails[i];
+          const alpha = Math.max(0, (st.life / st.maxLife) * 0.55);
+          ctx.fillStyle = st.color;
+          ctx.globalAlpha = alpha;
+          ctx.fillRect(st.x1 - 1.5, st.y, 3, 14);
+          ctx.fillRect(st.x2 - 1.5, st.y, 3, 14);
+        }
+        ctx.globalAlpha = 1;
+
+        if (gameState !== 'PLAYING' && gameState !== 'PAUSED') return;
+
+        // Flicker during post-crash invulnerability
+        if (player.invulnTimer > 0 && !isHyperInvulnerable() && Math.sin(nowSec * 36) < -0.15) {
+          return;
+        }
+
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.tilt);
+
+        const rainbowColor = 'hsl(' + Math.floor((nowSec * 360) % 360) + ', 100%, 60%)';
+        const chassisColor = isHyperInvulnerable() ? rainbowColor : '#00f3ff';
+
+        // Aegis Shield Aura
+        if (activeTimers.shield) {
+          drawDualStroke(
+            function () {
+              ctx.ellipse(0, 0, 25, 38, 0, 0, Math.PI * 2);
+            },
+            '#00ff88',
+            8,
+            2.2,
+            false
+          );
+        }
+
+        // Dual Rear Thruster Flames
+        const flameLen = (isHyperInvulnerable() ? 24 : 13) + Math.sin(player.thrustOffset) * 5;
+        const flameColor = isHyperInvulnerable() ? rainbowColor : '#ff007f';
+        drawDualStroke(
+          function () {
+            ctx.moveTo(-9, 25);
+            ctx.lineTo(-6, 25 + flameLen);
+            ctx.lineTo(-3, 25);
+            ctx.moveTo(3, 25);
+            ctx.lineTo(6, 25 + flameLen);
+            ctx.lineTo(9, 25);
+          },
+          flameColor,
+          7,
+          2.2,
+          true
+        );
+
+        // Sleek Angular Vector Supercar Hull
+        ctx.fillStyle = '#070a18';
+        ctx.beginPath();
+        ctx.moveTo(0, -29);
+        ctx.lineTo(13, -12);
+        ctx.lineTo(16, 18);
+        ctx.lineTo(11, 26);
+        ctx.lineTo(-11, 26);
+        ctx.lineTo(-16, 18);
+        ctx.lineTo(-13, -12);
+        ctx.closePath();
+        ctx.fill();
+
+        drawDualStroke(
+          function () {
+            ctx.moveTo(0, -29);
+            ctx.lineTo(13, -12);
+            ctx.lineTo(16, 18);
+            ctx.lineTo(11, 26);
+            ctx.lineTo(-11, 26);
+            ctx.lineTo(-16, 18);
+            ctx.lineTo(-13, -12);
+            ctx.closePath();
+          },
+          chassisColor,
+          9,
+          2.5,
+          true
+        );
+
+        // Cockpit Canopy Accent
+        ctx.fillStyle = activeTimers.railgun ? '#ff007f' : '#00f3ff';
+        ctx.beginPath();
+        ctx.moveTo(0, -13);
+        ctx.lineTo(6, 2);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(-6, 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Wing-mounted Twin Railgun pods when active
+        if (activeTimers.railgun) {
+          ctx.fillStyle = '#ff007f';
+          ctx.fillRect(-17, -10, 4, 14);
+          ctx.fillRect(13, -10, 4, 14);
+        }
+
+        ctx.restore();
+      }
+
+      function drawProjectilesAndFX(nowSec) {
+        // Player Twin Railgun Bolts
+        for (let i = 0; i < playerBolts.length; i++) {
+          const b = playerBolts[i];
+          drawDualStroke(
+            function () {
+              ctx.moveTo(b.x, b.y - 11);
+              ctx.lineTo(b.x, b.y + 11);
+            },
+            '#ff007f',
+            8,
+            2.6,
+            true
+          );
+        }
+
+        // Boss Plasma Cannon Bolts
+        for (let i = 0; i < bossProjectiles.length; i++) {
+          const bp = bossProjectiles[i];
+          ctx.fillStyle = '#ff0055';
+          ctx.beginPath();
+          ctx.arc(bp.x, bp.y, bp.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(bp.x, bp.y, bp.radius * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Boss Plasma Mines
+        for (let i = 0; i < bossMines.length; i++) {
+          const bm = bossMines[i];
+          const r = bm.radius + Math.sin(bm.pulse) * 2;
+          drawDualStroke(
+            function () {
+              ctx.arc(bm.x, bm.y, r, 0, Math.PI * 2);
+            },
+            '#ff7b00',
+            7,
+            2.2,
+            true
+          );
+        }
+
+        // Near-Miss Electric Graze Arcs
+        for (let i = 0; i < grazeArcs.length; i++) {
+          const arc = grazeArcs[i];
+          const alpha = Math.max(0, arc.life / arc.maxLife);
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          drawDualStroke(
+            function () {
+              const mx = (arc.x1 + arc.x2) * 0.5 + (Math.random() - 0.5) * 18;
+              const my = (arc.y1 + arc.y2) * 0.5 + (Math.random() - 0.5) * 18;
+              ctx.moveTo(arc.x1, arc.y1);
+              ctx.lineTo(mx, my);
+              ctx.lineTo(arc.x2, arc.y2);
+            },
+            '#00f3ff',
+            7,
+            2,
+            true
+          );
+          ctx.restore();
+        }
+
+        // Shockwave Rings
+        for (let i = 0; i < shockwaves.length; i++) {
+          const sw = shockwaves[i];
+          const prog = 1 - sw.life / sw.maxLife;
+          const r = sw.radius + (sw.maxRadius - sw.radius) * prog;
+          const alpha = Math.max(0, sw.life / sw.maxLife);
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.strokeStyle = sw.color;
+          ctx.lineWidth = 4 * alpha + 1.5;
+          ctx.beginPath();
+          ctx.arc(sw.x, sw.y, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Pooled Particles
+        for (let i = 0; i < MAX_PARTICLES; i++) {
+          const p = particles[i];
+          if (!p.active) continue;
+          ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x - p.size * 0.5, p.y - p.size * 0.5, p.size, p.size);
+        }
+        ctx.globalAlpha = 1;
+
+        // Floating Score & Near-Miss Popups
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i < popups.length; i++) {
+          const pop = popups[i];
+          ctx.globalAlpha = Math.min(1, pop.life * 1.4);
+          ctx.font = '800 ' + Math.round(13 * pop.scale) + 'px Orbitron, Inter, sans-serif';
+          ctx.fillStyle = '#05050a';
+          ctx.fillText(pop.text, pop.x + 1.5, pop.y + 1.5);
+          ctx.fillStyle = pop.color;
+          ctx.fillText(pop.text, pop.x, pop.y);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function render(nowMs) {
+        const nowSec = nowMs * 0.001;
+        ctx.save();
+
+        if (shakeTime > 0) {
+          const mag = (shakeTime / 0.45) * shakeMag;
+          ctx.translate((Math.random() - 0.5) * mag * 2, (Math.random() - 0.5) * mag * 2);
+        }
+
+        drawHighway(nowSec);
+        drawShardsAndCapsules(nowSec);
+        drawObstacles(nowSec);
+        drawOmegaJuggernaut(nowSec);
+        drawPlayerInterceptor(nowSec);
+        drawProjectilesAndFX(nowSec);
+
+        if (flashAlpha > 0) {
+          ctx.fillStyle = flashColor;
+          ctx.globalAlpha = flashAlpha;
+          ctx.fillRect(0, 0, viewW, viewH);
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.restore();
+      }
+
+      // =========================================================================
+      // 11. GAME LIFECYCLE CONTROLS (START, PAUSE, MUTE, GAME OVER)
+      // =========================================================================
+      window.startGame = function () {
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        if (now - lastStartCallMs < 150) return;
+        lastStartCallMs = now;
+
+        initAudio();
+        resizeCanvas();
+
+        score = 0;
+        highScore = safeGetHighScore();
+        distanceM = 0;
+        sector = 1;
+        nextBossDistM = SECTOR_INTERVAL_M;
+        hull = STARTING_HULL;
+        combo = 1;
+        maxCombo = 1;
+        comboTimer = 0;
+        overdriveCharge = 0;
+        overdriveTimer = 0;
+        activeTimers = {};
+
+        player.x = getLaneCenterX(2);
+        player.y = viewH - (viewW < 640 ? 132 : 112);
+        player.vx = 0;
+        player.tilt = 0;
+        player.invulnTimer = 1.0;
+        player.railgunCooldown = 0;
+
+        obstacles = [];
+        shards = [];
+        capsules = [];
+        playerBolts = [];
+        bossProjectiles = [];
+        bossMines = [];
+        shockwaves = [];
+        grazeArcs = [];
+        popups = [];
+        skidTrails.length = 0;
+        boss = null;
+
+        for (let i = 0; i < MAX_PARTICLES; i++) {
+          particles[i].active = false;
+        }
+
+        spawnTimer = 0.4;
+        bossSupplyTimer = 1.5;
+
+        gameState = 'PLAYING';
+        document.getElementById('menuScreen').classList.add('hidden');
+        document.getElementById('pauseScreen').classList.add('hidden');
+        document.getElementById('gameOverScreen').classList.add('hidden');
+
+        renderHullHearts();
+        renderActivePowerupsHUD();
+        updateHUD();
+        updatePauseIcons();
+        showSectorToast('HIGHWAY ONLINE', 'SECTOR 1');
+        sfx.powerup();
+      };
+
+      window.togglePause = function () {
+        if (gameState === 'PLAYING') {
+          gameState = 'PAUSED';
+          touchBtns.left = false;
+          touchBtns.right = false;
+          dragControl.active = false;
+          document.getElementById('pauseScreen').classList.remove('hidden');
+        } else if (gameState === 'PAUSED') {
+          gameState = 'PLAYING';
+          lastFrameTime = performance.now();
+          document.getElementById('pauseScreen').classList.add('hidden');
+        }
+        updatePauseIcons();
+      };
+
+      function updatePauseIcons() {
+        const bars = document.getElementById('pauseBarsIcon');
+        const tri = document.getElementById('resumeTriIcon');
+        if (gameState === 'PAUSED') {
+          bars.classList.add('hidden');
+          tri.classList.remove('hidden');
+        } else {
+          bars.classList.remove('hidden');
+          tri.classList.add('hidden');
+        }
+      }
+
+      window.toggleMute = function () {
+        isMuted = !isMuted;
+        document.getElementById('audioOnIcon').classList.toggle('hidden', isMuted);
+        document.getElementById('audioOffIcon').classList.toggle('hidden', !isMuted);
+        if (!isMuted) {
+          initAudio();
+          sfx.shard();
+        }
+      };
+
+      function triggerGameOver() {
+        gameState = 'GAMEOVER';
+        const finalScore = Math.floor(score);
+        const isRecord = finalScore > 0 && finalScore >= highScore;
+        safeSetHighScore(highScore);
+
+        document.getElementById('finalScoreVal').textContent = finalScore.toLocaleString();
+        document.getElementById('finalBestVal').textContent = highScore.toLocaleString();
+        document.getElementById('finalDistVal').textContent = Math.floor(distanceM).toLocaleString() + 'm';
+        document.getElementById('finalComboVal').textContent = maxCombo + 'X';
+        document.getElementById('menuHighScore').textContent = highScore.toLocaleString();
+        document.getElementById('newRecordBadge').classList.toggle('hidden', !isRecord);
+
+        document.getElementById('sectorToast').classList.add('hidden');
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+      }
+
+      // =========================================================================
+      // 12. MAIN ANIMATION LOOP & DESKTOP / MOBILE INPUT HANDLERS
+      // =========================================================================
+      function gameLoop(nowMs) {
+        if (!lastFrameTime) lastFrameTime = nowMs;
+        const dt = Math.min(0.05, Math.max(0, (nowMs - lastFrameTime) * 0.001));
+        lastFrameTime = nowMs;
+
+        update(dt);
+        render(nowMs);
+        window.requestAnimationFrame(gameLoop);
+      }
+
+      // Keyboard Controls
+      document.addEventListener('keydown', function (e) {
+        keys[e.code] = true;
+
+        if (e.code === 'KeyM') {
+          window.toggleMute();
+          return;
+        }
+
+        if (e.code === 'KeyP' || e.code === 'Escape') {
+          if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+            e.preventDefault();
+            window.togglePause();
+          }
+          return;
+        }
+
+        if (e.code === 'Space') {
+          if (gameState === 'PLAYING') {
+            e.preventDefault();
+            window.activateOverdrive();
+          } else if (gameState === 'MENU' || gameState === 'GAMEOVER') {
+            e.preventDefault();
+            window.startGame();
+          }
+        }
+      });
+
+      document.addEventListener('keyup', function (e) {
+        keys[e.code] = false;
+      });
+
+      // Direct Horizontal Touch-Drag Steering on Highway Canvas
+      canvas.addEventListener(
+        'pointerdown',
+        function (e) {
+          if (gameState !== 'PLAYING') return;
+          if (e.target && typeof e.target.closest === 'function' && e.target.closest('button')) return;
+          dragControl.active = true;
+          dragControl.pointerId = e.pointerId;
+          dragControl.lastX = e.clientX;
+        },
+        { passive: true }
+      );
+
+      canvas.addEventListener(
+        'pointermove',
+        function (e) {
+          if (!dragControl.active || e.pointerId !== dragControl.pointerId || gameState !== 'PLAYING') return;
+          const dx = e.clientX - dragControl.lastX;
+          dragControl.lastX = e.clientX;
+          player.x += dx * 1.15;
+          player.vx = dx * 28;
+        },
+        { passive: true }
+      );
+
+      const endCanvasDrag = function (e) {
+        if (dragControl.pointerId !== null && e.pointerId === dragControl.pointerId) {
+          dragControl.active = false;
+          dragControl.pointerId = null;
+        }
+      };
+      canvas.addEventListener('pointerup', endCanvasDrag);
+      canvas.addEventListener('pointercancel', endCanvasDrag);
+
+      // Tactile Bottom Steering Buttons (Left & Right)
+      function bindHoldSteerButton(btnId, dirKey) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.addEventListener('pointerdown', function (e) {
+          e.preventDefault();
+          btn.classList.add('pressed');
+          touchBtns[dirKey] = true;
+        });
+        const release = function (e) {
+          if (e) e.preventDefault();
+          btn.classList.remove('pressed');
+          touchBtns[dirKey] = false;
+        };
+        btn.addEventListener('pointerup', release);
+        btn.addEventListener('pointercancel', release);
+        btn.addEventListener('pointerleave', release);
+      }
+
+      bindHoldSteerButton('touchLeftBtn', 'left');
+      bindHoldSteerButton('touchRightBtn', 'right');
+
+      // Redundant addEventListener bindings on Start & Restart buttons
+      const startBtn = document.getElementById('startBtn');
+      const restartBtn = document.getElementById('restartBtn');
+      if (startBtn) {
+        startBtn.addEventListener('click', function () {
+          window.startGame();
+        });
+      }
+      if (restartBtn) {
+        restartBtn.addEventListener('click', function () {
+          window.startGame();
+        });
+      }
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden && gameState === 'PLAYING') {
+          window.togglePause();
+        }
+      });
+
+      // Initial Bootstrap
+      document.getElementById('menuHighScore').textContent = highScore.toLocaleString();
+      resizeCanvas();
+      renderHullHearts();
+      window.requestAnimationFrame(gameLoop);
+    })();
+  </script>
+</body>
+</html>
